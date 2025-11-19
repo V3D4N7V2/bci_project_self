@@ -7,6 +7,9 @@ import torch
 from model_training import rnn_model
 
 
+###############################################################################
+
+
 @torch.no_grad()
 def prune_day_weights_by_magnitude(model: 'rnn_model.GRUDecoder', retain_fraction: float):
     """Sets day_weights with the lowest (1-retain_fraction) fraction of magnitudes to zero.
@@ -49,3 +52,44 @@ def _prune_parameters(parameters: List[torch.nn.Parameter], retain_fraction: flo
     v[keep_inds] = keep_vals
 
     torch.nn.utils.vector_to_parameters(v, parameters)
+
+
+###############################################################################
+# Parameterization-related stuff.
+
+
+class Pruned(torch.nn.Module):
+
+    @torch.no_grad()
+    def __init__(
+        self,
+        # Must be the shape shape, dtype, and device as the corresponding weight. Zeros
+        # in the mask will be kept zeros. Non-zero values will be set to one.
+        #
+        # If initializing from a pruned tensor, then you can just use the weight as the mask.
+        mask: torch.Tensor,
+    ):
+        super().__init__()
+        self._mask = torch.nn.parameter.Buffer((mask != 0.0).type(mask.dtype))
+
+    def forward(self, X: torch.Tensor):
+        return X * self._mask.detach()
+
+
+def apply_parameterization(
+    model: 'rnn_model.GRUDecoder',
+):
+    """Applies parameterization, using the existing zero values of the weights at the mask."""
+    torch.nn.utils.parametrize.register_parametrization(model, 'h0', Pruned(model.h0))
+
+    for i, weight in enumerate(model.day_weights):
+        torch.nn.utils.parametrize.register_parametrization(model.day_weights, str(i), Pruned(weight))
+
+    for i, weight in enumerate(model.day_biases):
+        torch.nn.utils.parametrize.register_parametrization(model.day_biases, str(i), Pruned(weight))
+
+    for n, p in list(model.gru.named_parameters()):
+        torch.nn.utils.parametrize.register_parametrization(model.gru, n, Pruned(p))
+
+    for n, p in list(model.out.named_parameters()):
+        torch.nn.utils.parametrize.register_parametrization(model.out, n, Pruned(p))

@@ -8,7 +8,7 @@ from bci_class import rnn_model_utils
 from bci_class.compression import magnitude_pruning
 
 ###############################################################################
-parser = argparse.ArgumentParser(description='Compresses an RNN model with SVD.')
+parser = argparse.ArgumentParser(description='Compresses an RNN model with magnitude_pruning.')
 
 parser.add_argument('--input_path', type=str, help='Path to the input pretrained model directory.')
 parser.add_argument('--output_path', type=str, help='Path to the output pretrained model directory.')

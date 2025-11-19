@@ -123,7 +123,8 @@ class GRUDecoder(nn.Module):
             states = self.h0.expand(self.n_layers, x.shape[0], self.n_units).contiguous()
 
         # Pass input through RNN 
-        output, hidden_states = self.gru(x, states)
+        # output, hidden_states = self.gru(x, states)
+        output, hidden_states = self.gru(x.contiguous(), states.contiguous())
 
         # Compute logits
         logits = self.out(output)

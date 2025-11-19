@@ -38,6 +38,10 @@ pip install \
     accelerate==1.8.1 \
     bitsandbytes==0.46.0
 
+
+# Stuff I am installing.
+# pip install fvcore
+
 echo
 echo "Setup complete! Verify it worked by activating the conda environment with the command 'conda activate b2txt25'."
 echo
