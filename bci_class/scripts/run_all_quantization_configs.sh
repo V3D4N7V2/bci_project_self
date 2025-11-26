@@ -278,40 +278,77 @@ run_config() {
     local output_dir="$OUTPUT_BASE_DIR/quantized_${qtype}_${dtype}"
     local model_output_path="$output_dir/checkpoint/quantized_model.pt"
     
-    # Step 1: Quantize
-    print_info "  Step 1: Quantizing model..."
-    local quantize_cmd=(
-        "$PYTHON_CMD" "$QUANTIZE_SCRIPT"
-        --model_path "$MODEL_PATH"
-        --output_path "$model_output_path"
-        --quantization_type "$qtype"
-        --dtype "$dtype"
-        --data_dir "$DATA_DIR"
-        --csv_path "$CSV_PATH"
-        --gpu_number "$GPU_NUMBER"
-    )
-    
-    # Add calibration parameters for static methods
-    if [[ "$qtype" == "static" ]] || [[ "$qtype" == "static_per_channel" ]]; then
-        quantize_cmd+=(
-            --calibration_batch_size 32
-            --calibration_samples 1000
+    # Check if quantized model already exists and is valid
+    if [[ -f "$model_output_path" ]]; then
+        # Try to verify it's a valid quantized model by checking if Python can load it
+        local check_cmd=(
+            "$PYTHON_CMD" -c "
+import torch
+import sys
+try:
+    checkpoint = torch.load('$model_output_path', weights_only=False, map_location='cpu')
+    if checkpoint.get('quantized', False):
+        qtype = checkpoint.get('quantization_type', '')
+        dtype = checkpoint.get('dtype', '')
+        if qtype == '$qtype' and dtype == '$dtype':
+            state_dict = checkpoint.get('model_state_dict', {})
+            if state_dict:
+                print('VALID')
+                sys.exit(0)
+    sys.exit(1)
+except Exception as e:
+    sys.exit(1)
+"
         )
+        
+        if "${check_cmd[@]}" > /dev/null 2>&1; then
+            print_warning "  Quantized model already exists and is valid, skipping quantization..."
+            print_info "  Using existing model at: $model_output_path"
+        else
+            print_warning "  Quantized model exists but appears invalid, re-quantizing..."
+            # Remove the invalid model file
+            rm -f "$model_output_path"
+        fi
     fi
     
-    if [[ "$VERBOSE" == true ]]; then
-        print_info "  Command: ${quantize_cmd[*]}"
-    fi
-    
-    local quantize_start=$(date +%s)
-    if "${quantize_cmd[@]}" > "$RESULTS_DIR/${qtype}_${dtype}_quantize.log" 2>&1; then
-        local quantize_end=$(date +%s)
-        local quantize_time=$((quantize_end - quantize_start))
-        print_success "  Quantization completed in ${quantize_time}s"
+    # Step 1: Quantize (only if model doesn't exist or is invalid)
+    if [[ ! -f "$model_output_path" ]]; then
+        print_info "  Step 1: Quantizing model..."
+        local quantize_cmd=(
+            "$PYTHON_CMD" "$QUANTIZE_SCRIPT"
+            --model_path "$MODEL_PATH"
+            --output_path "$model_output_path"
+            --quantization_type "$qtype"
+            --dtype "$dtype"
+            --data_dir "$DATA_DIR"
+            --csv_path "$CSV_PATH"
+            --gpu_number "$GPU_NUMBER"
+        )
+        
+        # Add calibration parameters for static methods
+        if [[ "$qtype" == "static" ]] || [[ "$qtype" == "static_per_channel" ]]; then
+            quantize_cmd+=(
+                --calibration_batch_size 32
+                --calibration_samples 1000
+            )
+        fi
+        
+        if [[ "$VERBOSE" == true ]]; then
+            print_info "  Command: ${quantize_cmd[*]}"
+        fi
+        
+        local quantize_start=$(date +%s)
+        if "${quantize_cmd[@]}" > "$RESULTS_DIR/${qtype}_${dtype}_quantize.log" 2>&1; then
+            local quantize_end=$(date +%s)
+            local quantize_time=$((quantize_end - quantize_start))
+            print_success "  Quantization completed in ${quantize_time}s"
+        else
+            print_error "  Quantization failed! Check log: $RESULTS_DIR/${qtype}_${dtype}_quantize.log"
+            FAILED_METHODS+=("$method_name (quantization failed)")
+            return 1
+        fi
     else
-        print_error "  Quantization failed! Check log: $RESULTS_DIR/${qtype}_${dtype}_quantize.log"
-        FAILED_METHODS+=("$method_name (quantization failed)")
-        return 1
+        print_info "  Step 1: Skipped (model already exists)"
     fi
     
     # Step 2: Evaluate

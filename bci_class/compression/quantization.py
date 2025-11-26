@@ -113,20 +113,33 @@ def quantize_model_static_per_channel(
             if calibration_batches >= max_calibration_batches:
                 break
             
-            features = batch['input_features'].to(device)
-            day_indicies = batch['day_indicies'].to(device)
+            # Extract features and day indices from batch
+            # The model forward expects: x (tensor) and day_idx (tensor)
+            x = batch['input_features'].to(device)
+            day_idx = batch['day_indicies'].to(device)
+            
+            # Ensure day_idx is a 1D tensor (not a tuple or list)
+            if isinstance(day_idx, (list, tuple)):
+                day_idx = torch.tensor(day_idx, device=device)
+            elif not isinstance(day_idx, torch.Tensor):
+                day_idx = torch.tensor([day_idx], device=device)
             
             try:
-                _ = model(features, day_indicies)
+                _ = model(x=x, day_idx=day_idx, states=None, return_state=False)
                 calibration_batches += 1
             except Exception as e:
                 print(f"Warning: Error during calibration batch {calibration_batches}: {e}")
+                import traceback
+                traceback.print_exc()
                 break
     
     print(f"Calibrated with {calibration_batches} batches")
     
     # Convert to quantized model
     quantized_model = torch.quantization.convert(model, inplace=False)
+    
+    # Ensure quantized model is on CPU (static quantized models cannot be moved to GPU)
+    quantized_model = quantized_model.cpu()
     
     return quantized_model
 
@@ -182,21 +195,34 @@ def quantize_model_static(
             if calibration_batches >= max_calibration_batches:
                 break
             
-            features = batch['input_features'].to(device)
-            day_indicies = batch['day_indicies'].to(device)
+            # Extract features and day indices from batch
+            # The model forward expects: x (tensor) and day_idx (tensor)
+            x = batch['input_features'].to(device)
+            day_idx = batch['day_indicies'].to(device)
+            
+            # Ensure day_idx is a 1D tensor (not a tuple or list)
+            if isinstance(day_idx, (list, tuple)):
+                day_idx = torch.tensor(day_idx, device=device)
+            elif not isinstance(day_idx, torch.Tensor):
+                day_idx = torch.tensor([day_idx], device=device)
             
             # Run forward pass for calibration
             try:
-                _ = model(features, day_indicies)
+                _ = model(x=x, day_idx=day_idx, states=None, return_state=False)
                 calibration_batches += 1
             except Exception as e:
                 print(f"Warning: Error during calibration batch {calibration_batches}: {e}")
+                import traceback
+                traceback.print_exc()
                 break
     
     print(f"Calibrated with {calibration_batches} batches")
     
     # Convert to quantized model
     quantized_model = torch.quantization.convert(model, inplace=False)
+    
+    # Ensure quantized model is on CPU (static quantized models cannot be moved to GPU)
+    quantized_model = quantized_model.cpu()
     
     return quantized_model
 

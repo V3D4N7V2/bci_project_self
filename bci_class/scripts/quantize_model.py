@@ -95,6 +95,45 @@ def main():
     }
     dtype = dtype_map[args.dtype]
     
+    # Check if quantized model already exists and is valid
+    if os.path.exists(args.output_path):
+        try:
+            checkpoint = torch.load(args.output_path, weights_only=False, map_location='cpu')
+            
+            # Check if it's a quantized model
+            if checkpoint.get('quantized', False):
+                existing_qtype = checkpoint.get('quantization_type')
+                existing_dtype = checkpoint.get('dtype', 'qint8')
+                
+                # Check if quantization type and dtype match
+                if existing_qtype == args.quantization_type and existing_dtype == args.dtype:
+                    print(f"\nQuantized model already exists at: {args.output_path}")
+                    print(f"  Type: {existing_qtype}, Dtype: {existing_dtype}")
+                    print(f"  Skipping quantization. Using existing model.")
+                    
+                    # Verify the model can be loaded
+                    try:
+                        # Try to load the state dict to verify it's valid
+                        state_dict = checkpoint.get('model_state_dict', {})
+                        if state_dict:
+                            print(f"  Model state dict verified ({len(state_dict)} parameters).")
+                            return  # Exit early, model already exists and is valid
+                        else:
+                            print(f"  Warning: Model state dict is empty, re-quantizing...")
+                    except Exception as e:
+                        print(f"  Warning: Error verifying model: {e}")
+                        print(f"  Re-quantizing...")
+                else:
+                    print(f"\nExisting quantized model found but with different settings:")
+                    print(f"  Existing: type={existing_qtype}, dtype={existing_dtype}")
+                    print(f"  Requested: type={args.quantization_type}, dtype={args.dtype}")
+                    print(f"  Re-quantizing with new settings...")
+            else:
+                print(f"\nExisting model found but it's not quantized. Re-quantizing...")
+        except Exception as e:
+            print(f"\nWarning: Error checking existing model: {e}")
+            print(f"  Re-quantizing...")
+    
     # Quantize model
     if args.quantization_type == 'dynamic':
         print(f"Applying Method 1: Dynamic quantization (dtype: {args.dtype})...")

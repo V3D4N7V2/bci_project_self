@@ -125,8 +125,17 @@ def main():
             new_state_dict[new_key] = original_state_dict[key]
         
         model.load_state_dict(new_state_dict)
-        model.to(device)
         model.eval()
+        
+        # For static quantization, model must be on CPU
+        # For dynamic quantization, we can use the requested device
+        if quantization_type in ['static', 'static_per_channel']:
+            # Static quantized models MUST stay on CPU
+            model = model.cpu()
+            calibration_device = torch.device('cpu')
+        else:
+            model.to(device)
+            calibration_device = device
         
         # Quantize the model
         print(f"Quantizing model with {quantization_type} quantization...")
@@ -141,7 +150,7 @@ def main():
                 batch_size=32,
                 num_samples=1000,
             )
-            model = quantize_model_static(model, calibration_loader, device, dtype=dtype)
+            model = quantize_model_static(model, calibration_loader, calibration_device, dtype=dtype)
         elif quantization_type == 'static_per_channel':
             # Need calibration data for static per-channel quantization
             calibration_loader = create_calibration_data_loader(
@@ -151,13 +160,19 @@ def main():
                 batch_size=32,
                 num_samples=1000,
             )
-            model = quantize_model_static_per_channel(model, calibration_loader, device, dtype=dtype)
+            model = quantize_model_static_per_channel(model, calibration_loader, calibration_device, dtype=dtype)
         else:
             raise ValueError(f"Unknown quantization type: {quantization_type}")
         
         # Now load the quantized state dict
         quantized_state_dict = checkpoint['model_state_dict']
         model.load_state_dict(quantized_state_dict, strict=False)
+        
+        # Ensure static quantized models stay on CPU
+        if quantization_type in ['static', 'static_per_channel']:
+            model = model.cpu()
+            device = torch.device('cpu')  # Override device for static quantized models
+        
         print("Quantized model loaded successfully!")
     else:
         # Fallback: try to load directly (may not work for quantized models)
@@ -217,9 +232,17 @@ def main():
                 neural_input = data['neural_features'][trial]
                 neural_input = np.expand_dims(neural_input, axis=0)
                 # Use float32 for CPU inference (bfloat16 may not be supported on CPU)
+                # For static quantized models, ensure inputs are on CPU
                 neural_input = torch.tensor(neural_input, device=device, dtype=torch.float32)
                 
-                logits = runSingleDecodingStep(neural_input, input_layer, model, model_args, device)
+                # For static quantized models, ensure model and inputs are on CPU
+                if quantization_type in ['static', 'static_per_channel']:
+                    neural_input = neural_input.cpu()
+                    inference_device = torch.device('cpu')
+                else:
+                    inference_device = device
+                
+                logits = runSingleDecodingStep(neural_input, input_layer, model, model_args, inference_device)
                 data['logits'].append(logits)
                 pbar.update(1)
     
