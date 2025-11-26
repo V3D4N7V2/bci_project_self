@@ -2,13 +2,13 @@
 
 
 # Ensure conda is available
-source "$(/fruitbasket/users/mmatena/miniconda3/bin/conda info --base)/etc/profile.d/conda.sh"
+source "$(conda info --base)/etc/profile.d/conda.sh"
 
 # Create conda environment with Python 3.10
-/fruitbasket/users/mmatena/miniconda3/bin/conda create -n b2txt25 python=3.10 -y
+conda create -n b2txt25 python=3.10 -y
 
 # Activate the new environment
-/fruitbasket/users/mmatena/miniconda3/bin/conda activate b2txt25
+conda activate b2txt25
 
 # Upgrade pip
 pip install --upgrade pip
