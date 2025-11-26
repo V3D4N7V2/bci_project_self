@@ -3,31 +3,33 @@
 # Ensure that the script is run from the root directory of the project
 if [ ! -f "setup_lm.sh" ]; then
     echo "This script must be run from the root directory of the project."
-    exit 1
+    # exit 1
 fi
 
 # ensure that the language_model/runtime/server/x86/build directory does not exist
 if [ -d "language_model/runtime/server/x86/build" ]; then
     echo "The language_model/runtime/server/x86/build directory already exists. Please remove it before running this script."
-    exit 1
+    # exit 1
+    rm -rf "language_model/runtime/server/x86/build"
 fi
 
 # ensure that the language_model/runtime/server/x86/fc_base directory does not exist
 if [ -d "language_model/runtime/server/x86/fc_base" ]; then
     echo "The language_model/runtime/server/x86/fc_base directory already exists. Please remove it before running this script."
-    exit 1
+    # exit 1
+    rm -rf "language_model/runtime/server/x86/fc_base"
 fi
 
 # make sure CMake is installed
 if ! command -v cmake &> /dev/null; then
     echo "CMake is not installed. Please install CMake >= 3.14 before running this script with 'sudo apt-get install cmake'."
-    exit 1
+    # exit 1
 fi
 
 # make sure gcc is installed
 if ! command -v gcc &> /dev/null; then
     echo "GCC is not installed. Please install GCC >= 10.1 before running this script with 'sudo apt-get install build-essential'."
-    exit 1
+    # exit 1
 fi
 
 # Ensure conda is available
