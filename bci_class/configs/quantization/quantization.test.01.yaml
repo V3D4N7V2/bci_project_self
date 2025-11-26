@@ -1,0 +1,52 @@
+# Configuration for quantization experiments
+# This config is used for testing quantized models
+
+###############################################################################
+# Model paths
+
+input_model_path: ./data/t15_pretrained_rnn_baseline  # Path to the pretrained model to quantize
+output_model_path: ./data/quantized_rnn_dynamic_qint8  # Path to save the quantized model
+
+###############################################################################
+# Quantization settings
+
+quantization_type: dynamic  # Type of quantization: 'dynamic' or 'static'
+dtype: qint8  # Quantization dtype: 'qint8' or 'float16'
+
+# Settings for static quantization (only used if quantization_type is 'static')
+calibration:
+  data_dir: ./data/hdf5_data_final  # Directory containing calibration data
+  csv_path: ./data/t15_copyTaskData_description.csv  # CSV file with metadata
+  batch_size: 32  # Batch size for calibration
+  num_samples: 1000  # Number of samples to use for calibration
+
+###############################################################################
+# Evaluation settings
+
+evaluation:
+  data_dir: ./data/hdf5_data_final  # Directory containing evaluation data
+  csv_path: ./data/t15_copyTaskData_description.csv  # CSV file with metadata
+  eval_type: val  # Evaluation type: 'val' or 'test'
+  gpu_number: 0  # GPU number to use (-1 for CPU)
+  skip_lm: false  # Skip language model inference for faster evaluation
+
+###############################################################################
+# Model architecture (loaded from input model, shown here for reference)
+
+model:
+  n_input_features: 512  # Number of input features in the neural data
+  n_units: 768  # Number of units per GRU layer
+  rnn_dropout: 0.0  # Dropout rate for GRU layers
+  n_layers: 5  # Number of GRU layers
+  patch_size: 14  # Size of input patches
+  patch_stride: 4  # Stride for input patches
+  input_network:
+    input_layer_dropout: 0.0  # Dropout rate for input layer
+
+dataset:
+  sessions:  # List of sessions (loaded from input model)
+    - t15.2023.08.11
+    - t15.2023.08.13
+    # ... (other sessions loaded from input model)
+  n_classes: 41  # Number of classes (phonemes)
+
