@@ -269,29 +269,45 @@ def create_calibration_data_loader(
     Returns:
         DataLoader with calibration data
     """
+    import math
+    
     b2txt_csv_df = pd.read_csv(csv_path)
     
     # Load a subset of training data for calibration
     # Build trial_indicies dict in the format expected by BrainToTextDataset
     trial_indicies = {}
     samples_per_session = max(1, num_samples // len(sessions))
+    total_trials = 0
     
     for session_idx, session in enumerate(sessions):
         train_file = os.path.join(dataset_dir, session, 'data_train.hdf5')
         if os.path.exists(train_file):
             data = load_h5py_file(train_file, b2txt_csv_df)
             num_trials = min(len(data['neural_features']), samples_per_session)
-            trial_indicies[session] = {
+            trial_indicies[session_idx] = {
                 'trials': list(range(num_trials)),
-                'day_idx': session_idx
+                'day_idx': session_idx,
+                'session_path': train_file
             }
+            total_trials += num_trials
+    
+    # Check if we have any data
+    if len(trial_indicies) == 0:
+        raise ValueError(f"No training data found in dataset_dir: {dataset_dir}. "
+                        f"Expected files: {[os.path.join(dataset_dir, s, 'data_train.hdf5') for s in sessions]}")
+    
+    # Calculate number of batches needed for calibration
+    # We want enough batches to cover num_samples, but at least 1 batch
+    # Since each batch can have batch_size samples, we need ceil(num_samples / batch_size) batches
+    # But we're limited by the actual number of trials available
+    n_batches = max(1, min(math.ceil(num_samples / batch_size), math.ceil(total_trials / batch_size)))
     
     # Create dataset
     calibration_dataset = BrainToTextDataset(
         trial_indicies=trial_indicies,
         split='train',
         days_per_batch=1,  # One day per batch for calibration
-        n_batches=None,  # Will be determined by dataset
+        n_batches=n_batches,  # Calculate based on num_samples and batch_size
         batch_size=batch_size,
         must_include_days=None,
         random_seed=42,

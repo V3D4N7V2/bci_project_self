@@ -190,9 +190,8 @@ declare -a CONFIGS=(
     "static_per_channel:qint8:Method 4: Static Per-Channel INT8"
 )
 
-# Create results directory
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-RESULTS_DIR="$OUTPUT_BASE_DIR/quantization_results_$TIMESTAMP"
+# Create results directory (fixed location, no timestamp)
+RESULTS_DIR="$OUTPUT_BASE_DIR/quantization_results"
 mkdir -p "$RESULTS_DIR"
 
 print_info "=========================================="
@@ -212,6 +211,39 @@ echo ""
 # Arrays to store results
 declare -a SUCCESSFUL_METHODS=()
 declare -a FAILED_METHODS=()
+declare -a SKIPPED_METHODS=()
+
+# Function to check if a configuration is already completed
+is_config_completed() {
+    local qtype=$1
+    local dtype=$2
+    local output_dir="$OUTPUT_BASE_DIR/quantized_${qtype}_${dtype}"
+    local model_output_path="$output_dir/checkpoint/quantized_model.pt"
+    local quantize_log="$RESULTS_DIR/${qtype}_${dtype}_quantize.log"
+    local eval_log="$RESULTS_DIR/${qtype}_${dtype}_eval.log"
+    
+    # Check if quantized model exists
+    if [[ ! -f "$model_output_path" ]]; then
+        return 1  # Not completed
+    fi
+    
+    # Check if quantize log exists and indicates success (no obvious errors)
+    if [[ ! -f "$quantize_log" ]]; then
+        return 1  # Not completed
+    fi
+    
+    # Check if eval log exists and contains PER (indicates successful evaluation)
+    if [[ ! -f "$eval_log" ]]; then
+        return 1  # Not completed
+    fi
+    
+    # Check if eval log contains "Phoneme Error Rate" which indicates successful completion
+    if ! grep -qi "Phoneme Error Rate" "$eval_log" > /dev/null 2>&1; then
+        return 1  # Not completed
+    fi
+    
+    return 0  # Completed
+}
 
 # Function to run quantization and evaluation for a configuration
 run_config() {
@@ -223,6 +255,24 @@ run_config() {
     
     print_info "[$config_num/$total_configs] Processing: $method_name"
     print_info "  Type: $qtype, Dtype: $dtype"
+    
+    # Check if this configuration is already completed
+    if is_config_completed "$qtype" "$dtype"; then
+        print_warning "  Configuration already completed, skipping..."
+        
+        # Try to extract PER from existing log
+        local eval_log="$RESULTS_DIR/${qtype}_${dtype}_eval.log"
+        if [[ -f "$eval_log" ]]; then
+            local per=$(grep -i "Phoneme Error Rate" "$eval_log" | grep -oE "[0-9]+\.[0-9]+" | head -1)
+            if [[ -n "$per" ]]; then
+                print_info "  PER: $per (from previous run)"
+            fi
+        fi
+        
+        SKIPPED_METHODS+=("$method_name")
+        SUCCESSFUL_METHODS+=("$method_name")
+        return 0
+    fi
     
     # Create output directory for this configuration
     local output_dir="$OUTPUT_BASE_DIR/quantized_${qtype}_${dtype}"
@@ -332,6 +382,9 @@ print_info "=========================================="
 print_info "Total time: ${TOTAL_TIME}s"
 print_info "Successful: ${#SUCCESSFUL_METHODS[@]}/${#CONFIGS[@]}"
 print_info "Failed: ${#FAILED_METHODS[@]}/${#CONFIGS[@]}"
+if [[ ${#SKIPPED_METHODS[@]} -gt 0 ]]; then
+    print_info "Skipped (already completed): ${#SKIPPED_METHODS[@]}/${#CONFIGS[@]}"
+fi
 echo ""
 
 if [[ ${#SUCCESSFUL_METHODS[@]} -gt 0 ]]; then
@@ -346,6 +399,14 @@ if [[ ${#FAILED_METHODS[@]} -gt 0 ]]; then
     print_error "Failed methods:"
     for method in "${FAILED_METHODS[@]}"; do
         echo "  ✗ $method"
+    done
+    echo ""
+fi
+
+if [[ ${#SKIPPED_METHODS[@]} -gt 0 ]]; then
+    print_warning "Skipped methods (already completed):"
+    for method in "${SKIPPED_METHODS[@]}"; do
+        echo "  ⊘ $method"
     done
     echo ""
 fi
@@ -369,6 +430,9 @@ $(for method in "${SUCCESSFUL_METHODS[@]}"; do echo "  ✓ $method"; done)
 
 Failed methods (${#FAILED_METHODS[@]}):
 $(for method in "${FAILED_METHODS[@]}"; do echo "  ✗ $method"; done)
+
+Skipped methods (${#SKIPPED_METHODS[@]}):
+$(for method in "${SKIPPED_METHODS[@]}"; do echo "  ⊘ $method"; done)
 
 Configuration details:
 $(for config in "${CONFIGS[@]}"; do echo "  - $config"; done)
