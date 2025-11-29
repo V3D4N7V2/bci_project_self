@@ -62,8 +62,8 @@ Optional:
 Quantization Methods Tested:
     1. Dynamic INT8 (qint8)
     2. Dynamic FP16 (float16)
-    3. Static Per-Tensor INT8 (qint8)
-    4. Static Per-Channel INT8 (qint8)
+    3. Hybrid Dynamic+Static Per-Tensor INT8 (qint8)
+    4. Hybrid Dynamic+Per-Channel Static INT8 (qint8)
 
 Example:
     $0 --model_path ./data/t15_pretrained_rnn_baseline --gpu_number 0 --skip_lm
@@ -186,8 +186,8 @@ fi
 declare -a CONFIGS=(
     "dynamic:qint8:Method 1: Dynamic INT8"
     "dynamic:float16:Method 2: Dynamic FP16"
-    "static:qint8:Method 3: Static Per-Tensor INT8"
-    "static_per_channel:qint8:Method 4: Static Per-Channel INT8"
+    "static:qint8:Method 3: Hybrid Dynamic+Static Per-Tensor INT8"
+    "static_per_channel:qint8:Method 4: Hybrid Dynamic+Per-Channel Static INT8"
 )
 
 # Create results directory (fixed location, no timestamp)

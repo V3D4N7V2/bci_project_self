@@ -1,0 +1,4 @@
+session,block,trial,pred_phonemes,pred_words,acoustic_score,lm_score,total_score
+t15.2023.08.13,8,0,Y UW  |  K AE N  |  S IY  |  DH AH  |  K OW D  |  AE T  |  DH IH S  |  P OY N T  |  AE Z  |  W IH L  | ,,-59.86721420288086,-2.99609375,-20.956258010864257
+t15.2023.08.13,8,1,HH AW  |  D AH S  |  IH T  |  K IY P  |  DH AH  |  K AA S T  |  T AW N T  | ,,-46.05170822143555,-0.798828125,-14.614340591430663
+t15.2023.08.13,8,2,N AA T  |  T UW  |  K AE N CH R UW F UW SH AH L  | ,,-36.84136199951172,-0.798828125,-11.851236724853516

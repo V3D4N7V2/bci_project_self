@@ -107,7 +107,7 @@ if args.magnitude_pruned:
 
 
 # load model weights
-checkpoint = torch.load(os.path.join(model_path, 'checkpoint/best_checkpoint'), weights_only=False)
+checkpoint = torch.load(os.path.join(model_path, 'checkpoint/best_checkpoint'), weights_only=False, map_location=device)
 # rename keys to not start with "module." (happens if model was saved with DataParallel)
 for key in list(checkpoint['model_state_dict'].keys()):
     checkpoint['model_state_dict'][key.replace("module.", "")] = checkpoint['model_state_dict'].pop(key)
@@ -138,13 +138,14 @@ print()
 
 
 # put neural data through the pretrained model to get phoneme predictions (logits)
+inference_start_time = time.time()
 with tqdm(total=total_test_trials, desc='Predicting phoneme sequences', unit='trial') as pbar:
     for session, data in test_data.items():
 
         data['logits'] = []
         data['pred_seq'] = []
         input_layer = model_args['dataset']['sessions'].index(session)
-        
+
         for trial in range(len(data['neural_features'])):
             # get neural input for the trial
             neural_input = data['neural_features'][trial]
@@ -153,7 +154,7 @@ with tqdm(total=total_test_trials, desc='Predicting phoneme sequences', unit='tr
             neural_input = np.expand_dims(neural_input, axis=0)
 
             # convert to torch tensor
-            neural_input = torch.tensor(neural_input, device=device, dtype=torch.bfloat16)
+            neural_input = torch.tensor(neural_input, device=device, dtype=torch.float32)
 
             # run decoding step
             logits = runSingleDecodingStep(neural_input, input_layer, model, model_args, device)
@@ -161,6 +162,8 @@ with tqdm(total=total_test_trials, desc='Predicting phoneme sequences', unit='tr
 
             pbar.update(1)
 pbar.close()
+inference_time = time.time() - inference_start_time
+print(f"Inference completed in {inference_time:.2f} seconds ({inference_time/total_test_trials:.3f} sec/trial)")
 
 
 # convert logits to phoneme sequences and print them out
@@ -273,6 +276,26 @@ with tqdm(total=total_test_trials, desc='Running remote language model', unit='t
             # update progress bar
             pbar.update(1)
 pbar.close()
+
+
+# Calculate Phoneme Error Rate (PER) if using validation set
+if eval_type == 'val':
+    total_edit_distance = 0
+    total_seq_length = 0
+
+    for session, data in test_data.items():
+        for trial in range(len(data['pred_seq'])):
+            true_seq = data['seq_class_ids'][trial][0:data['seq_len'][trial]]
+            true_seq = [LOGIT_TO_PHONEME[p] for p in true_seq]
+            pred_seq = data['pred_seq'][trial]
+
+            # Calculate edit distance
+            ed = editdistance.eval(true_seq, pred_seq)
+            total_edit_distance += ed
+            total_seq_length += len(true_seq)
+
+    avg_PER = total_edit_distance / total_seq_length if total_seq_length > 0 else 0.0
+    print(f"\nPhoneme Error Rate (PER): {avg_PER:.4f} ({total_edit_distance}/{total_seq_length})")
 
 
 # if using the validation set, lets calculate the aggregate word error rate (WER)
